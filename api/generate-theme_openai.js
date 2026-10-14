@@ -4,6 +4,31 @@ import { sanitizeDualTheme } from "../shared/themeSanitizer.mjs";
 export const config = {
     runtime: 'edge', // Use edge runtime for fetch support
 };
+
+// ---------------------------------------------------------------------------
+// [PATCH] Capacitor 安卓端 CORS 支持
+// 安卓 WebView 页面源为 https://localhost，属跨域请求，必须显式放行；
+// 浏览器同源访问（无 Origin 头）行为保持不变。
+const buildCorsHeaders = (req) => {
+    const origin = req.headers.get('origin');
+    if (!origin) {
+        return {};
+    }
+    return {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'POST,OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Vary': 'Origin',
+    };
+};
+const jsonResponse = (req, body, status) => new Response(JSON.stringify(body), {
+    status,
+    headers: {
+        'Content-Type': 'application/json',
+        ...buildCorsHeaders(req),
+    },
+});
+// ---------------------------------------------------------------------------
 const DEFAULT_OPENAI_CHAT_COMPLETIONS_URL = 'https://api.openai.com/v1/chat/completions';
 const DEFAULT_OPENAI_MODEL = 'gpt-5.6-luna';
 const DEFAULT_OPENAI_TEMPERATURE = 0.7;
@@ -263,19 +288,16 @@ const extractResponseContentText = (message) => {
     return null;
 };
 export default async function handler(req) {
+    if (req.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: buildCorsHeaders(req) });
+    }
     if (req.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return jsonResponse(req, { error: 'Method Not Allowed' }, 405);
     }
     try {
         const { lyricsText, isPureMusic = false, songTitle } = await req.json();
         if (!lyricsText) {
-            return new Response(JSON.stringify({ error: 'Missing lyricsText' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonResponse(req, { error: 'Missing lyricsText' }, 400);
         }
         const apiKey = process.env.OPENAI_API_KEY;
         const apiUrl = normalizeOpenAIChatCompletionsUrl(process.env.OPENAI_API_URL);
@@ -287,10 +309,7 @@ export default async function handler(req) {
         const provider = detectOpenAICompatibleProvider(apiUrl);
         if (!apiKey) {
             console.error("OpenAI API Key is missing in server environment.");
-            return new Response(JSON.stringify({ error: 'Server configuration error' }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonResponse(req, { error: 'Server configuration error' }, 500);
         }
         // Limit text to avoid token limits if lyrics are huge
         const snippet = lyricsText.slice(0, 2000);
@@ -338,17 +357,11 @@ export default async function handler(req) {
         dualTheme.light.provider = 'OpenAI Compatible';
         dualTheme.dark.fontStyle = 'sans';
         dualTheme.dark.provider = 'OpenAI Compatible';
-        return new Response(JSON.stringify(dualTheme), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return jsonResponse(req, dualTheme, 200);
     }
     catch (error) {
         console.error("Error generating theme:", error);
         const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-        return new Response(JSON.stringify({ error: errorMessage }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return jsonResponse(req, { error: errorMessage }, 500);
     }
 }
