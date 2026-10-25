@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlignLeft, AudioWaveform, Move } from 'lucide-react';
-import { DEFAULT_MONET_TUNING, type MonetTuning } from '../../../types';
+import { DEFAULT_MONET_TUNING, SITE_MONET_DESCRIPTION_ENABLED, type MonetTuning } from '../../../types';
 import { QuickControlToggle } from '../../shared/QuickControlChip';
 import { defineVisualizer, type VisualizerQuickControlsProps } from '../definition';
 import { MonetSettingsPanel } from './MonetSettingsPanel';
@@ -50,13 +50,16 @@ export default defineVisualizer({
         const showHanger = tuning.showPortraitDragHanger ?? true;
         return (
             <>
-                <QuickControlToggle
-                    active={tuning.showDescription}
-                    label={t('options.monetShowDescription')}
-                    onToggle={() => onTuningChange({ showDescription: !tuning.showDescription })}
-                >
-                    <AlignLeft size={14} />
-                </QuickControlToggle>
+                {/* 站点定制：那句「一言」（歌曲描述）已常驻关闭，快捷控制也收起（见 types.ts 的 SITE_MONET_DESCRIPTION_ENABLED）。 */}
+                {SITE_MONET_DESCRIPTION_ENABLED && (
+                    <QuickControlToggle
+                        active={tuning.showDescription}
+                        label={t('options.monetShowDescription')}
+                        onToggle={() => onTuningChange({ showDescription: !tuning.showDescription })}
+                    >
+                        <AlignLeft size={14} />
+                    </QuickControlToggle>
+                )}
                 <QuickControlToggle
                     active={showHanger}
                     label={t('options.monetPortraitDragHanger')}
