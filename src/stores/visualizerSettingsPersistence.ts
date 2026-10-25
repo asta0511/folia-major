@@ -85,14 +85,29 @@ export const writeStoredTuning = (key: string, tuning: unknown) => {
     }
 };
 
+/**
+ * [站点定制] 一次性迁移：把「历史上从没主动选过」的听众落到新的默认样式（莫奈）。
+ * 只有空值和旧默认 classic 会被迁移；迁移过一次就写标记，之后听众在设置里选回 classic
+ * 不会被反复覆盖。新访客没有存档，本来就走 DEFAULT_VISUALIZER_MODE。
+ */
+const VISUALIZER_MODE_DEFAULT_MIGRATION_KEY = 'folia_site_defaults_visualizer_mode_v1';
+
 export const readStoredVisualizerMode = (): VisualizerMode => {
     if (typeof window === 'undefined') {
         return DEFAULT_VISUALIZER_MODE;
     }
 
-    const saved = localStorage.getItem('visualizer_mode');
+    let saved = localStorage.getItem('visualizer_mode');
     if (saved === 'cadenza' || saved === 'cadenze') {
         return 'cadenza';
+    }
+
+    if (localStorage.getItem(VISUALIZER_MODE_DEFAULT_MIGRATION_KEY) !== '1') {
+        localStorage.setItem(VISUALIZER_MODE_DEFAULT_MIGRATION_KEY, '1');
+        if (saved === null || saved === 'classic') {
+            localStorage.setItem('visualizer_mode', DEFAULT_VISUALIZER_MODE);
+            saved = DEFAULT_VISUALIZER_MODE;
+        }
     }
 
     return isBuiltinVisualizerMode(saved) ? saved : DEFAULT_VISUALIZER_MODE;
