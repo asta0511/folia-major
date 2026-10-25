@@ -39,7 +39,9 @@ export const BUILTIN_VISUALIZER_BACKGROUND_MODES = [
     'url',
 ] as const;
 
-export const DEFAULT_VISUALIZER_MODE: VisualizerMode = 'classic';
+// [站点定制] 本站默认歌词样式改为「莫奈」（上游为 classic）。改这一处即可，
+// 所有读取默认值的路径（store 初始化、OBS 外观、同步快照兜底）都会跟着变。
+export const DEFAULT_VISUALIZER_MODE: VisualizerMode = 'monet';
 export const DEFAULT_VISUALIZER_BACKGROUND_MODE: VisualizerBackgroundMode = 'latent';
 
 const VISUALIZER_MODE_SET: ReadonlySet<string> = new Set(BUILTIN_VISUALIZER_MODES);
