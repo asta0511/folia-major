@@ -320,22 +320,48 @@ const requestThemeContent = async (
     });
 };
 
+// ---------------------------------------------------------------------------
+// [PATCH] Capacitor 安卓端 CORS 支持
+// 安卓 WebView 页面源为 https://localhost，属跨域请求，必须显式放行；
+// 浏览器同源访问（无 Origin 头）行为保持不变。
+const buildCorsHeaders = (req: Request): Record<string, string> => {
+    const origin = req.headers.get('origin');
+    if (!origin) {
+        return {};
+    }
+    return {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'POST,OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Vary': 'Origin',
+    };
+};
+const jsonResponse = (req: Request, body: unknown, status: number): Response => new Response(
+    JSON.stringify(body),
+    {
+        status,
+        headers: {
+            'Content-Type': 'application/json',
+            ...buildCorsHeaders(req),
+        },
+    },
+);
+// ---------------------------------------------------------------------------
+
 export default async function handler(req: Request) {
+    if (req.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: buildCorsHeaders(req) });
+    }
+
     if (req.method !== 'POST') {
-        return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return jsonResponse(req, { error: 'Method Not Allowed' }, 405);
     }
 
     try {
         const { lyricsText, isPureMusic = false, songTitle } = await req.json();
 
         if (!lyricsText) {
-            return new Response(JSON.stringify({ error: 'Missing lyricsText' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonResponse(req, { error: 'Missing lyricsText' }, 400);
         }
 
         const apiKey = process.env.OPENAI_API_KEY;
@@ -355,10 +381,7 @@ export default async function handler(req: Request) {
 
         if (!apiKey) {
             console.error("OpenAI API Key is missing in server environment.");
-            return new Response(JSON.stringify({ error: 'Server configuration error' }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' },
-            });
+            return jsonResponse(req, { error: 'Server configuration error' }, 500);
         }
 
         // Limit text to avoid token limits if lyrics are huge
@@ -392,17 +415,11 @@ export default async function handler(req: Request) {
         dualTheme.dark.fontStyle = 'sans';
         dualTheme.dark.provider = 'OpenAI Compatible';
 
-        return new Response(JSON.stringify(dualTheme), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return jsonResponse(req, dualTheme, 200);
 
     } catch (error) {
         console.error("Error generating theme:", error);
         const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
-        return new Response(JSON.stringify({ error: errorMessage }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-        });
+        return jsonResponse(req, { error: errorMessage }, 500);
     }
 }
