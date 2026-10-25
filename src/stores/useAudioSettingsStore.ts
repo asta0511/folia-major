@@ -61,9 +61,17 @@ export const DEFAULT_MEDIA_CACHE_LIMIT_GB = 5;
 
 export type AudioQuality = AudioQualityPreference;
 
-export const resolveStoredAudioQuality = (saved: string | null): AudioQuality => (
-    saved === 'standard' || saved === 'ultra' || saved === 'lossless' || saved === 'hires' ? saved : 'high'
-);
+/** [站点定制] 本站默认音质改为 Hi-Res（上游为 high）。 */
+export const DEFAULT_AUDIO_QUALITY: AudioQuality = 'hires';
+
+export const resolveStoredAudioQuality = (saved: string | null): AudioQuality => {
+    // 旧版网易云取值，落成 provider 中立名
+    if (saved === 'exhigh') return 'high';
+    if (saved === 'standard' || saved === 'high' || saved === 'ultra' || saved === 'lossless' || saved === 'hires') {
+        return saved;
+    }
+    return DEFAULT_AUDIO_QUALITY;
+};
 
 /**
  * Reads the media cache toggle, honouring the key its own setter used to write to.
@@ -102,12 +110,28 @@ export const readStoredMediaCacheLimitGb = (): number => {
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_MEDIA_CACHE_LIMIT_GB;
 };
 
+/**
+ * [站点定制] 一次性迁移：把停在旧默认音质（high，或更早的 exhigh）的听众切到新的默认 Hi-Res。
+ * 迁移过一次就写标记，之后听众在设置里自己选回别的音质不会被反复覆盖。
+ * 账号拿不到 Hi-Res 时由服务端降级（实测该账号返回 lossless），不会导致播放失败。
+ */
+const AUDIO_QUALITY_DEFAULT_MIGRATION_KEY = 'folia_site_defaults_audio_quality_v1';
+
 const readStoredAudioQuality = (): AudioQuality => {
     if (typeof window === 'undefined') {
-        return 'high';
+        return DEFAULT_AUDIO_QUALITY;
     }
 
     const saved = localStorage.getItem('default_audio_quality');
+
+    if (localStorage.getItem(AUDIO_QUALITY_DEFAULT_MIGRATION_KEY) !== '1') {
+        localStorage.setItem(AUDIO_QUALITY_DEFAULT_MIGRATION_KEY, '1');
+        if (saved === null || saved === 'high' || saved === 'exhigh') {
+            localStorage.setItem('default_audio_quality', DEFAULT_AUDIO_QUALITY);
+            return DEFAULT_AUDIO_QUALITY;
+        }
+    }
+
     const quality = resolveStoredAudioQuality(saved);
     if (saved === 'exhigh') {
         localStorage.setItem('default_audio_quality', 'high');
