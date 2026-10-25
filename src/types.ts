@@ -1119,6 +1119,18 @@ export const DEFAULT_MONET_TUNING: MonetTuning = {
   showPortraitDragHanger: true,
 };
 
+/**
+ * 站点定制（见 AI_HANDOFF §2.13）：莫奈播放页那句「一言」常驻关闭。
+ *
+ * 它渲染的是 AI 主题的 description（`theme.description`），由 generate-theme 接口生成的一句情绪文案，
+ * 显示在歌词栏底部的小胶囊里（切到莫奈后默认就有一条）。本站点不需要它，所以：
+ * 渲染、设置页的「显示歌曲描述」开关、可视化快捷控制里的同名开关，全部按这个常量处理。
+ *
+ * 与存储无关：哪怕某台设备 localStorage 里的 `monet_tuning` 存着 `showDescription: true`，
+ * 或者导入了带 true 的外观预设，这一句也不会出现。改回 true 即恢复（上游默认开着）。
+ */
+export const SITE_MONET_DESCRIPTION_ENABLED: boolean = false;
+
 export interface StoredCappellaEmojiImage {
   id: string;
   name: string;
