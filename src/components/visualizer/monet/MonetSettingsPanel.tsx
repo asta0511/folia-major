@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import { useVisualizerAssetStore } from '../../../stores/useVisualizerAssetStore';
-import { DEFAULT_MONET_TUNING, type MonetAudioStyle, type MonetPortraitSource, type MonetTuning } from '../../../types';
+import { DEFAULT_MONET_TUNING, SITE_MONET_DESCRIPTION_ENABLED, type MonetAudioStyle, type MonetPortraitSource, type MonetTuning } from '../../../types';
 import { Button, Group, PictureGrid, Reveal, Row, Segmented, type SettingsGroupDef } from '../../modal/settings/kit';
 import { type VisualizerSettingsPanelProps } from '../definition';
 import { SliderRow, times, ToggleRow } from '../panelRows';
@@ -102,11 +102,14 @@ export const MonetSettingsPanel: React.FC<VisualizerSettingsPanelProps<MonetTuni
                     checked={resolvedTuning.keywordColoringEnabled}
                     onChange={(value) => onMonetTuningChange?.({ keywordColoringEnabled: value })}
                 />
-                <ToggleRow
-                    label={t('options.monetShowDescription')}
-                    checked={resolvedTuning.showDescription}
-                    onChange={(value) => onMonetTuningChange?.({ showDescription: value })}
-                />
+                {/* 站点定制：那句「一言」（歌曲描述）已常驻关闭，开关一并收起（见 types.ts 的 SITE_MONET_DESCRIPTION_ENABLED）。 */}
+                {SITE_MONET_DESCRIPTION_ENABLED && (
+                    <ToggleRow
+                        label={t('options.monetShowDescription')}
+                        checked={resolvedTuning.showDescription}
+                        onChange={(value) => onMonetTuningChange?.({ showDescription: value })}
+                    />
+                )}
             </Group>
 
             <Group def={PORTRAIT_GROUP}>
