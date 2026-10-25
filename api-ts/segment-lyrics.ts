@@ -11,12 +11,25 @@ export const config = {
     runtime: 'edge',
 };
 
+// 跨域头：Capacitor/APK 里页面的 Origin 是 https://localhost，调用本站的 /api/* 属于跨域。
+// 这里不涉及 cookie（前端不带凭据），所以 `*` 足够；但必须在响应和预检里都出现，否则 WebView 直接拦截。
+const CORS_HEADERS: Record<string, string> = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+};
+
 const json = (body: unknown, status: number) => new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
 });
 
 export default async function handler(req: Request) {
+    if (req.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
     if (req.method !== 'POST') {
         return json({ error: 'Method Not Allowed' }, 405);
     }
