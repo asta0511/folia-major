@@ -3,7 +3,9 @@ import { WallTitle } from '../../../components/wall/WallTitle';
 import { useWallPosterArtwork } from '../../../components/wall/useWallPosterArtwork';
 import { parseWallSlotKey } from '../../../components/wall/wallSlots';
 import { countRender } from '../../../dev/renderCount';
+import { getSizedCoverUrl } from '../../../utils/coverUrl';
 import {
+    BRAVAIS_ALBUM_COVER_PX,
     BRAVAIS_METRICS,
     BRAVAIS_REDUCED_FADE_MS,
     BRAVAIS_TILE_FLIP_IN_MS,
@@ -238,9 +240,14 @@ function BravaisTile({
     // B11 整墙入场：只按 token 认（入场途中的数据更新沿用同一个 entrance，不重启）。已经在放的翻牌 / 波次让给它；
     // 落回之前保持抬起（fill backwards），刚挂载的磁贴也一样落回。入场窗口过了才挂载的不动。
     const entranceToken = entrance?.token ?? null;
+    // 挂载时（第一次渲染）带着的入场：按它认「这次入场时刚挂载」。不按 effect 跑没跑过认——StrictMode 挂载后会卸载
+    // 再挂载一遍（清理会取消落回），重放时仍要认作挂载、重新排落回。
+    const mountEntranceTokenRef = useRef(entranceToken);
     useLayoutEffect(() => {
         const face = faceRef.current;
         if (!entrance || !face) return;
+        // 只给这一刻挂载的磁贴（探索页原地重排：留在原地的不动，正在放的入场也不打断）。
+        if (entrance.mountsOnly && entrance.token !== mountEntranceTokenRef.current) return;
         const now = performance.now();
         if (now >= entrance.until) return;
         const stagger = entrance.reduced ? 0 : getWaveStagger(rect, entrance.corner, BRAVAIS_METRICS);
@@ -271,6 +278,8 @@ function BravaisTile({
     );
     const isTrack = display?.kind === 'track';
     const isWindow = face.kind === 'window';
+    // 探索形状的 section 标题：只有字（序号、标题、这一段有几项哪几种），不能点、不进键盘走位（它不是条目）。
+    const isHeading = face.kind === 'heading';
     const cover = display ? (coverUrl ? `url("${coverUrl}")` : fallbackBackground(display.key)) : undefined;
     const isCurrent = Boolean(display && nowPlayingKey && display.key === nowPlayingKey);
     const isExpanded = expanded && isTrack;
@@ -288,6 +297,9 @@ function BravaisTile({
         art?.url,
         (art?.mode === 'mosaic' ? BRAVAIS_ALBUM_MOSAIC_PX : Math.max(rect.width, rect.height) * 2.75) * pixelScale,
     );
+    // 拼贴的大图到之前垫一张海报封面那档（已经在缓存里，放大后是糊的）：两层背景，大图解码完就盖住它。
+    const artStandIn = art?.mode === 'mosaic' ? getSizedCoverUrl(art.url, BRAVAIS_ALBUM_COVER_PX) : '';
+    const artImage = artStandIn && artStandIn !== artUrl ? `url("${artUrl}"), url("${artStandIn}")` : `url("${artUrl}")`;
     const artPlacement = !art || !display
         ? null
         : art.mode === 'mosaic' ? mosaicPlacement(rect, parseWallSlotKey(slotKey) ?? { column: 0, row: 0 }) : artSpots ? shardPlacement(artSpots, display.key, rect) : null;
@@ -318,10 +330,10 @@ function BravaisTile({
             className={`bravais-tile${isExpanded ? ' is-expanded' : ''}${keyboardFocused ? ' is-focused' : ''}`}
             style={style}
             data-bravais-slot={slotKey}
-            data-bravais-kind={isWindow ? 'window' : display?.kind ?? 'wall'}
+            data-bravais-kind={isWindow ? 'window' : isHeading ? 'heading' : display?.kind ?? 'wall'}
             data-bravais-see-through={face.seeThrough || undefined}
             data-library-entry={isTrack ? display?.key : undefined}
-            data-library-card={display && !isTrack ? display.key : undefined}
+            data-library-card={display && !isTrack && !isHeading ? display.key : undefined}
             data-bravais-focused={keyboardFocused || undefined}
             data-bravais-expanded={isExpanded || undefined}
             data-bravais-current={isCurrent || undefined}
@@ -337,16 +349,26 @@ function BravaisTile({
         >
             <article
                 ref={faceRef}
-                className={`lattice-poster bravais-tile-face${display ? '' : isWindow ? ' is-window' : ' is-wall'}${face.seeThrough ? ' is-see-through' : ''}${isExpanded ? ' is-expanded' : ''}${keyboardFocused ? ' is-focused' : ''}${isCurrent ? ' is-current' : ''}${display?.unavailable ? ' is-unavailable' : ''}${linked && display ? ' is-linked' : ''}${display?.dimmed ? ' is-dimmed' : ''}${display?.selected ? ' is-selected' : ''}${isStack ? ' is-stack' : ''}${isPortrait ? ' is-portrait' : ''}`}
-                style={display && !face.seeThrough ? { backgroundImage: cover } : undefined}
-                role={display ? (isExpanded ? 'group' : 'button') : undefined}
+                className={`lattice-poster bravais-tile-face${isHeading ? ' is-heading' : display ? '' : isWindow ? ' is-window' : ' is-wall'}${face.seeThrough ? ' is-see-through' : ''}${isExpanded ? ' is-expanded' : ''}${keyboardFocused ? ' is-focused' : ''}${isCurrent ? ' is-current' : ''}${display?.unavailable ? ' is-unavailable' : ''}${linked && display ? ' is-linked' : ''}${display?.dimmed ? ' is-dimmed' : ''}${display?.selected ? ' is-selected' : ''}${isStack ? ' is-stack' : ''}${isPortrait ? ' is-portrait' : ''}`}
+                style={display && !face.seeThrough && !isHeading ? { backgroundImage: cover } : undefined}
+                data-bravais-art={art?.mode}
+                role={display && !isHeading ? (isExpanded ? 'group' : 'button') : undefined}
                 aria-label={display ? `${display.title} · ${display.subtitle}${display.trackCountLabel ? ` · ${display.trackCountLabel}` : ''}` : undefined}
                 aria-expanded={isTrack ? isExpanded : undefined}
                 tabIndex={-1}
                 onMouseDown={isWindow ? preventFocus : undefined}
                 onClick={handleClick}
             >
-                {display && (
+                {display && isHeading && (
+                    <>
+                        <BravaisTileBadge item={display} current={false} />
+                        <span className="lattice-poster-copy">
+                            {display.title && <WallTitle title={display.title} expanded={false} targetPosterWidth={rect.width} maxLines={2} />}
+                            {display.subtitle && <small>{display.subtitle}</small>}
+                        </span>
+                    </>
+                )}
+                {display && !isHeading && (
                     <>
                         {drawsPortrait && (
                             <span
@@ -362,7 +384,7 @@ function BravaisTile({
                                 className="bravais-tile-art"
                                 data-bravais-art={art.mode}
                                 style={{
-                                    '--bravais-art-image': `url("${artUrl}")`,
+                                    '--bravais-art-image': artImage,
                                     '--bravais-art-size': `${artPlacement.size.toFixed(1)}px`,
                                     '--bravais-art-x': `${artPlacement.x.toFixed(1)}px`,
                                     '--bravais-art-y': `${artPlacement.y.toFixed(1)}px`,
