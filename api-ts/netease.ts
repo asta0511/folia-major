@@ -31,6 +31,10 @@ function buildCorsHeaders(request: Request): Record<string, string> {
   return {
     // 带上回显 Origin：Capacitor 的 Origin 是 https://localhost，需要精确匹配才能过预检
     'Access-Control-Allow-Origin': origin || '*',
+    // 前端（src/services/onlineMusic/netease/netease.ts）用 `credentials: 'include'` 发请求：
+    // 跨域时必须同时回这个头，否则浏览器直接丢弃响应，前端只会看到 TypeError（判成「无法连接」）。
+    // 有 Origin 时 ACAO 必须是具体来源，因此这里回显 origin 而不是 `*`。
+    ...(origin ? { 'Access-Control-Allow-Credentials': 'true' } : {}),
     'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type,Accept,X-Requested-With,Cache-Control,Pragma',
     'Access-Control-Max-Age': '86400',
