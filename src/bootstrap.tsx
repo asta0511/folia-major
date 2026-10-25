@@ -17,6 +17,7 @@ import { bootNavidromeServerPreset } from './services/navidromeServerPreset';
 import { isNavidromeEnabled } from './services/navidromeService';
 import { setNavidromeEnabledState } from './stores/useLibraryStore';
 import { isMainAppSurface, isObsBrowserSourceSurface, isRemoteControlSurface, obsSourceKind } from './utils/appSurface';
+import { applySiteStartupDefaults } from './stores/siteStartupDefaults';
 // 副作用 import：store 在模块加载时就把 `<html data-reduce-motion>` 写好并保持同步。放在 bootstrap
 // 而不是 App 里，是因为下面按 URL 挂的根不止 App —— 远程控制窗口的进度辉光也读这个属性。
 import './stores/useMotionSettingsStore';
@@ -42,6 +43,11 @@ const FIRST_SCREEN_MOD_WAIT_MS = 1500;
 // here, for every surface this bundle mounts, rather than inside App so the remote-control and OBS
 // roots are covered too and App.tsx does not grow. See utils/nativeDragGuard.ts.
 installNativeDragGuard();
+
+// 本站点定制：首启引导已关闭（hooks/useStartupExperienceGate），两页引导原本会写下的选择在这里一次性补上
+// ——资料库界面 bravais、播放后进入 player。渲染前跑，与上面的 Navidrome 预置同一个道理：store 在模块
+// 加载时就读过 localStorage。见 stores/siteStartupDefaults.ts。
+applySiteStartupDefaults();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
