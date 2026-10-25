@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, useMotionValueEvent, useDragControls, useMotionValue } from 'framer-motion';
 import { RotateCcw } from 'lucide-react';
 import { useElementWidth } from '../../../hooks/useElementWidth';
-import { DEFAULT_MONET_TUNING } from '../../../types';
+import { DEFAULT_MONET_TUNING, SITE_MONET_DESCRIPTION_ENABLED } from '../../../types';
 import { colorWithAlpha } from '../colorMix';
 import { type VisualizerSharedProps } from '../definition';
 import { useVisualizerRuntime } from '../runtime';
@@ -329,7 +329,7 @@ const VisualizerMonet: React.FC<VisualizerMonetProps> = (props) => {
                                 />
                             </motion.div>
 
-                            {monetTuning.showDescription && (
+                            {SITE_MONET_DESCRIPTION_ENABLED && monetTuning.showDescription && (
                                 <motion.div
                                     key={`desc-${introKey}`}
                                     initial={{ opacity: 0, scale: 0.9, y: 10 }}
