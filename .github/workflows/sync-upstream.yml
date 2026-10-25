@@ -1,0 +1,132 @@
+name: Sync upstream
+
+# 把上游 chthollyphile/folia-major 的更新合并进本仓库。
+# 冲突处理：generate-theme_openai 的两个文件取上游版，随后由脚本重放 CORS 补丁，
+# 再用 tsc 重新生成 api/*.js —— 这样既跟上游一致，又保留安卓端跨域必需的头。
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: '上游 ref（分支或 tag）'
+        required: true
+        default: 'v0.7.22'
+      target_branch:
+        description: '合并结果推送到哪个分支'
+        required: true
+        default: 'sync/upstream-v0.7.22'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge upstream into branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout main (full history)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "asta0511"
+          git config user.email "asta0511@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/chthollyphile/folia-major.git
+          git fetch --no-tags upstream "${{ inputs.upstream_ref }}"
+          echo "--- upstream head ---"
+          git log --oneline -1 FETCH_HEAD
+          echo "--- behind / ahead ---"
+          git rev-list --left-right --count HEAD...FETCH_HEAD || true
+
+      - name: Create working branch
+        run: |
+          git checkout -B "${{ inputs.target_branch }}"
+
+      - name: Merge upstream (keep conflicts)
+        run: |
+          set +e
+          git merge FETCH_HEAD --no-edit -m "merge: 同步上游 ${{ inputs.upstream_ref }}"
+          echo "--- 冲突文件 ---"
+          git diff --name-only --diff-filter=U
+
+      - name: Resolve conflicts
+        run: |
+          set -e
+          files=$(git diff --name-only --diff-filter=U || true)
+          if [ -z "$files" ]; then
+            echo "无冲突，直接继续"
+            exit 0
+          fi
+          for f in $files; do
+            case "$f" in
+              api-ts/generate-theme_openai.ts|api/generate-theme_openai.js)
+                echo "取上游版本（补丁稍后重放）: $f"
+                git checkout --theirs -- "$f"
+                git add "$f"
+                ;;
+              *)
+                echo "::error::出现未预期的冲突文件: $f"
+                exit 1
+                ;;
+            esac
+          done
+          echo "--- 剩余冲突 ---"
+          git diff --name-only --diff-filter=U || true
+
+      - name: Re-apply CORS patch
+        run: |
+          python3 .github/scripts/apply-cors-patch.py api-ts/generate-theme_openai.ts
+          grep -n "Access-Control-Allow-Origin" api-ts/generate-theme_openai.ts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Rebuild Vercel API (api-ts -> api)
+        run: npm run build:vercel-api
+
+      - name: Verify CORS survived the rebuild
+        run: |
+          fail=0
+          if grep -q "Access-Control-Allow-Origin" api/generate-theme_openai.js; then
+            echo "OK   api/ 产物含 CORS"
+          else
+            echo "MISS api/ 产物没有 CORS"; fail=1
+          fi
+          if grep -q "status: 204" api/generate-theme_openai.js; then
+            echo "OK   OPTIONS 预检分支存在"
+          else
+            echo "WARN 未找到 204 预检分支"
+          fi
+          exit $fail
+
+      - name: Typecheck (non-blocking report)
+        continue-on-error: true
+        run: npm run typecheck
+
+      - name: Commit merge result
+        run: |
+          git add -A
+          git status --short | head -50
+          git commit -m "chore(sync): 重放 CORS 补丁并重新生成 api 产物" || echo "没有需要提交的额外改动"
+
+      - name: Push branch
+        run: |
+          git push origin "HEAD:refs/heads/${{ inputs.target_branch }}" --force
+          echo "已推送分支 ${{ inputs.target_branch }}"
+          echo "对比： https://github.com/asta0511/folia-major/compare/main...${{ inputs.target_branch }}"
