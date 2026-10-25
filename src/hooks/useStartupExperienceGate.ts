@@ -8,6 +8,21 @@ import { useSettingsModalStore } from '../stores/useSettingsModalStore';
 
 const LAST_SEEN_RELEASE_NOTES_VERSION_STORAGE_KEY = 'folia_last_seen_guide_version';
 
+/**
+ * 站点定制（见 AI_HANDOFF §2.12）：首启引导整条序列永久关闭。
+ *
+ * 关掉的三页就是这条序列的前三步 —— 版本更新说明（ReleaseNotesDialog）、资料库界面选择、
+ * 点击播放后进入哪个视图；第四步的 Ponder 快捷键引导排在它们后面，留着就会紧接着弹出来，
+ * 所以一并关掉。手动入口都还在：设置 → 帮助页能打开版本更新说明，资料库界面与播放后进入
+ * 都是设置项（另见 stores/siteStartupDefaults.ts 写的默认值）。
+ *
+ * 改成返回 `false` 即可恢复上游行为。判定仍然交给下面那个纯函数（单测覆盖它），这里只做短路。
+ *
+ * 写成函数而不是常量：常量会被 TS 收窄成字面量，下面 `nextStep === 'release-notes'` 这些比较会被判成
+ * 「两种类型没有重叠」而编译失败。
+ */
+const isSiteStartupPromptsDisabled = (): boolean => true;
+
 export type StartupExperienceStep = 'release-notes' | 'playback-entry-view' | 'ponder' | null;
 
 type StartupExperienceState = {
@@ -83,7 +98,7 @@ export const useStartupExperienceGate = () => {
     const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
     const appVersion = typeof __APP_VERSION__ === 'undefined' ? null : __APP_VERSION__;
 
-    const nextStep = resolveStartupExperienceStep({
+    const nextStep: StartupExperienceStep = isSiteStartupPromptsDisabled() ? null : resolveStartupExperienceStep({
         isCurrentRelease: Boolean(appVersion && USER_GUIDE_AUTO_OPEN_VERSION === appVersion),
         hasSeenPonder: lastSeenPonderVersion !== null,
         hasFinishedThisRelease: Boolean(appVersion && lastSeenPonderVersion === appVersion),
